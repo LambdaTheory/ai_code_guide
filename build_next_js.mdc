@@ -1,0 +1,431 @@
+# NextJS + TailwindCSS 开发行为准则与代码规范
+
+## 适用范围
+所有基于NextJS框架和TailwindCSS的前端应用开发
+
+## 核心开发原则
+
+### 1. 项目结构规范
+```
+src/
+├── app/                    # App Router (NextJS 13+)
+│   ├── globals.css        # 全局样式
+│   ├── layout.tsx         # 根布局
+│   ├── page.tsx          # 首页
+│   └── (routes)/         # 路由组织
+├── components/            # 可复用组件
+│   ├── ui/               # 基础UI组件
+│   ├── forms/            # 表单组件
+│   └── layout/           # 布局组件
+├── lib/                  # 工具函数和配置
+├── hooks/                # 自定义React Hooks
+├── types/                # TypeScript类型定义
+└── utils/                # 通用工具函数
+```
+
+### 2. 组件开发规范
+
+#### 2.1 组件命名
+- 使用PascalCase命名组件文件和组件名
+- 文件名与组件名保持一致
+- 使用描述性名称，避免缩写
+
+```typescript
+// ✅ 正确
+export const UserProfileCard = () => {}
+
+// ❌ 错误
+export const UPC = () => {}
+export const userCard = () => {}
+```
+
+#### 2.2 组件结构
+```typescript
+'use client' // 仅在需要客户端功能时使用
+
+import { FC } from 'react'
+import { cn } from '@/lib/utils'
+
+interface ComponentProps {
+  className?: string
+  children?: React.ReactNode
+}
+
+export const Component: FC<ComponentProps> = ({ 
+  className,
+  children,
+  ...props 
+}) => {
+  return (
+    <div className={cn("base-styles", className)} {...props}>
+      {children}
+    </div>
+  )
+}
+```
+
+#### 2.3 Props接口定义
+- 所有组件必须定义TypeScript接口
+- 使用可选属性和默认值
+- 继承HTML元素属性当适用时
+
+```typescript
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: 'primary' | 'secondary' | 'outline'
+  size?: 'sm' | 'md' | 'lg'
+  loading?: boolean
+}
+```
+
+### 3. TailwindCSS使用规范
+
+#### 3.1 类名组织
+- 按功能分组：布局 → 间距 → 尺寸 → 颜色 → 状态
+- 使用cn()函数合并条件类名
+- 避免内联样式，优先使用Tailwind类
+
+```typescript
+// ✅ 正确
+const buttonClasses = cn(
+  // 基础样式
+  "inline-flex items-center justify-center rounded-md font-medium transition-colors",
+  // 尺寸变体
+  {
+    "h-10 px-4 py-2": size === 'md',
+    "h-9 px-3": size === 'sm',
+    "h-11 px-8": size === 'lg',
+  },
+  // 颜色变体
+  {
+    "bg-primary text-primary-foreground hover:bg-primary/90": variant === 'primary',
+    "bg-secondary text-secondary-foreground hover:bg-secondary/80": variant === 'secondary',
+  },
+  className
+)
+```
+
+#### 3.2 响应式设计
+- 移动优先设计原则
+- 使用标准断点：sm(640px) md(768px) lg(1024px) xl(1280px)
+- 关键组件必须在所有断点测试
+
+```typescript
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  <div className="p-4 md:p-6 lg:p-8">
+    {/* 内容 */}
+  </div>
+</div>
+```
+
+#### 3.3 主题和设计系统
+- 使用CSS变量定义主题色彩
+- 保持设计一致性，使用预定义的间距和尺寸
+- 支持暗色模式
+
+```css
+/* globals.css */
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --primary: 222.2 47.4% 11.2%;
+  --primary-foreground: 210 40% 98%;
+}
+
+.dark {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+}
+```
+
+### 4. NextJS特定规范
+
+#### 4.1 App Router使用
+- 优先使用App Router而非Pages Router
+- 正确使用Server Components和Client Components
+- 合理使用loading.tsx, error.tsx, not-found.tsx
+
+```typescript
+// app/dashboard/loading.tsx
+export default function Loading() {
+  return <div className="animate-pulse">加载中...</div>
+}
+
+// app/dashboard/error.tsx
+'use client'
+export default function Error({ error, reset }: {
+  error: Error & { digest?: string }
+  reset: () => void
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen">
+      <h2 className="text-xl font-semibold mb-4">出错了!</h2>
+      <button onClick={reset} className="px-4 py-2 bg-primary text-white rounded">
+        重试
+      </button>
+    </div>
+  )
+}
+```
+
+#### 4.2 数据获取
+- Server Components中使用async/await直接获取数据
+- Client Components中使用SWR或React Query
+- 实现适当的加载和错误状态
+
+```typescript
+// Server Component
+async function UserList() {
+  const users = await fetch('/api/users').then(res => res.json())
+  
+  return (
+    <div className="space-y-4">
+      {users.map(user => (
+        <UserCard key={user.id} user={user} />
+      ))}
+    </div>
+  )
+}
+
+// Client Component
+'use client'
+import useSWR from 'swr'
+
+function UserProfile({ userId }: { userId: string }) {
+  const { data, error, isLoading } = useSWR(`/api/users/${userId}`, fetcher)
+  
+  if (isLoading) return <div className="animate-pulse h-20 bg-gray-200 rounded" />
+  if (error) return <div className="text-red-500">加载失败</div>
+  
+  return <div>{/* 用户信息 */}</div>
+}
+```
+
+#### 4.3 API Routes
+- 使用适当的HTTP方法
+- 实现错误处理和验证
+- 返回一致的响应格式
+
+```typescript
+// app/api/users/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+
+export async function GET(request: NextRequest) {
+  try {
+    const users = await getUsersFromDB()
+    return NextResponse.json({ data: users, success: true })
+  } catch (error) {
+    return NextResponse.json(
+      { error: '获取用户失败', success: false },
+      { status: 500 }
+    )
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    // 验证数据
+    const user = await createUser(body)
+    return NextResponse.json({ data: user, success: true }, { status: 201 })
+  } catch (error) {
+    return NextResponse.json(
+      { error: '创建用户失败', success: false },
+      { status: 400 }
+    )
+  }
+}
+```
+
+### 5. 性能优化规范
+
+#### 5.1 图片优化
+- 使用Next.js Image组件
+- 提供适当的alt文本
+- 使用适当的尺寸和格式
+
+```typescript
+import Image from 'next/image'
+
+<Image
+  src="/hero-image.jpg"
+  alt="产品展示图"
+  width={800}
+  height={600}
+  priority // 首屏图片使用
+  className="rounded-lg object-cover"
+/>
+```
+
+#### 5.2 代码分割
+- 使用动态导入延迟加载组件
+- 合理使用Suspense边界
+
+```typescript
+import { Suspense, lazy } from 'react'
+
+const HeavyComponent = lazy(() => import('./HeavyComponent'))
+
+function Page() {
+  return (
+    <div>
+      <Suspense fallback={<div className="animate-pulse h-40 bg-gray-200" />}>
+        <HeavyComponent />
+      </Suspense>
+    </div>
+  )
+}
+```
+
+### 6. 代码质量规范
+
+#### 6.1 TypeScript使用
+- 启用严格模式
+- 避免使用any类型
+- 为复杂对象定义接口
+
+```typescript
+// ✅ 正确
+interface User {
+  id: string
+  name: string
+  email: string
+  createdAt: Date
+}
+
+// ❌ 错误
+const user: any = {}
+```
+
+#### 6.2 错误处理
+- 实现全局错误边界
+- 提供用户友好的错误信息
+- 记录错误用于调试
+
+```typescript
+'use client'
+import { ErrorBoundary } from 'react-error-boundary'
+
+function ErrorFallback({ error, resetErrorBoundary }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen p-4">
+      <h2 className="text-2xl font-bold text-red-600 mb-4">出现错误</h2>
+      <p className="text-gray-600 mb-4">抱歉，页面出现了问题</p>
+      <button 
+        onClick={resetErrorBoundary}
+        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+      >
+        重试
+      </button>
+    </div>
+  )
+}
+
+export function AppErrorBoundary({ children }) {
+  return (
+    <ErrorBoundary FallbackComponent={ErrorFallback}>
+      {children}
+    </ErrorBoundary>
+  )
+}
+```
+
+### 7. 测试规范
+
+#### 7.1 组件测试
+- 使用React Testing Library
+- 测试用户交互而非实现细节
+- 保持测试简单和可维护
+
+```typescript
+import { render, screen, fireEvent } from '@testing-library/react'
+import { Button } from './Button'
+
+describe('Button', () => {
+  it('应该渲染按钮文本', () => {
+    render(<Button>点击我</Button>)
+    expect(screen.getByRole('button', { name: '点击我' })).toBeInTheDocument()
+  })
+
+  it('应该处理点击事件', () => {
+    const handleClick = jest.fn()
+    render(<Button onClick={handleClick}>点击我</Button>)
+    
+    fireEvent.click(screen.getByRole('button'))
+    expect(handleClick).toHaveBeenCalledTimes(1)
+  })
+})
+```
+
+### 8. 部署和环境配置
+
+#### 8.1 环境变量
+- 使用.env.local用于本地开发
+- 敏感信息不提交到版本控制
+- 为不同环境配置不同的变量
+
+```bash
+# .env.local
+NEXT_PUBLIC_API_URL=http://localhost:3001
+DATABASE_URL=postgresql://...
+NEXTAUTH_SECRET=your-secret-key
+```
+
+#### 8.2 构建优化
+- 启用生产构建优化
+- 配置适当的缓存策略
+- 使用CDN加速静态资源
+
+```javascript
+// next.config.js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  experimental: {
+    appDir: true,
+  },
+  images: {
+    domains: ['example.com'],
+  },
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+        ],
+      },
+    ]
+  },
+}
+
+module.exports = nextConfig
+```
+
+## 代码审查检查清单
+
+### 提交前必检项目
+- [ ] 组件是否正确使用TypeScript类型
+- [ ] 是否遵循命名规范
+- [ ] TailwindCSS类名是否合理组织
+- [ ] 是否实现响应式设计
+- [ ] 是否处理加载和错误状态
+- [ ] 是否优化性能（图片、代码分割）
+- [ ] 是否添加适当的测试
+- [ ] 是否遵循无障碍性标准
+
+### 性能检查
+- [ ] 首屏加载时间 < 3秒
+- [ ] 图片是否优化
+- [ ] 是否使用适当的缓存策略
+- [ ] 是否避免不必要的重渲染
+
+### 用户体验检查
+- [ ] 移动端体验是否良好
+- [ ] 是否支持键盘导航
+- [ ] 错误信息是否用户友好
+- [ ] 加载状态是否清晰
+
+## 总结
+严格遵循以上规范，确保代码质量、性能和用户体验的最佳实践。每个开发者都应该熟悉并应用这些规范，在代码审查中相互监督执行。
