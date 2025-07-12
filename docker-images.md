@@ -1,0 +1,2 @@
+- prefecthq/prefect:3.4.8-python3.12-conda
+- postgres:17.5
